@@ -1,0 +1,132 @@
+﻿# Martin Configuration
+# Local AI Desktop Assistant v3.0
+
+# AI Provider Settings
+ai:
+  provider: "ollama"
+  model: "gemma3:4b"
+  ollama_url: "http://localhost:11434"
+  temperature: 0.7
+  max_tokens: 2048
+  system_prompt: |
+    Jsi Martin, lokální osobní AI asistent.
+    Tvé jméno je Martin.
+    Odpovídej primárně v češtině, pokud uživatel nemluví jiným jazykem.
+    Buď užitečný a stručný.
+    Nevymýšlej informace.
+    Jasně řekni, když něco nevíš.
+    Můžeš používat nástroje, když jsou k dispozici.
+    Nikdy neproveď nebezpečnou akci bez potvrzení uživatele.
+
+# Language Settings
+language:
+  default: "cs"
+  supported:
+    - "cs"
+    - "en"
+
+# Voice Settings
+voice:
+  stt:
+    provider: "faster-whisper"
+    model: "base"
+    language: "cs"
+    device: "cpu"
+    compute_type: "int8"
+  tts:
+    provider: "piper"
+    voice: "cs_CZ-jirka-medium"
+    speed: 1.0
+    enabled: false
+
+# GUI Settings
+gui:
+  theme: "dark"
+  window_width: 1200
+  window_height: 800
+  sidebar_width: 240
+  font_family: "Segoe UI"
+  font_size: 10
+  accent_color: "#0078d4"
+  background_color: "#1a1a2e"
+  panel_color: "#16213e"
+  border_color: "#0f3460"
+  text_color: "#e0e0e0"
+  text_secondary: "#a0a0a0"
+
+# Logging Settings
+logging:
+  level: "INFO"
+  file: "data/logs/martin.log"
+  max_size_mb: 10
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Memory Settings
+memory:
+  database_path: "data/memory/martin.db"
+  short_term_max_messages: 20
+  long_term_enabled: true
+
+# Tool Settings
+tools:
+  enabled:
+    - "open_app"
+    - "set_volume"
+    - "open_file"
+    - "read_file"
+    - "write_file"
+    - "search_web"
+  dangerous_tools_require_confirmation: true
+  allowed_apps:
+    - "notepad"
+    - "calculator"
+    - "explorer"
+    - "cmd"
+    - "powershell"
+  allowed_paths:
+    - 'C:\Users\lukas\Documents'
+    - 'C:\Users\lukas\Downloads'
+    - 'C:\Users\lukas\Desktop'
+
+# Mode Settings
+modes:
+  active: "general"
+  available:
+    - "general"
+    - "gaming"
+    - "flight"
+    - "coding"
+    - "study"
+
+# Security Settings
+security:
+  allow_shell_execution: false
+  allow_file_deletion: false
+  allow_system_modification: false
+  allow_software_installation: false
+  allow_registry_modification: false
+  confirmation_required_for:
+    - "file_delete"
+    - "shell_execute"
+    - "system_modify"
+    - "software_install"
+    - "registry_modify"
+
+# Data Paths
+data:
+  memory_dir: "data/memory"
+  knowledge_dir: "data/knowledge"
+  logs_dir: "data/logs"
+  models_dir: "data/models"
+
+# Resource Monitor Settings
+monitor:
+  update_interval_sec: 1.0
+  enable_gpu: true
+
+# Application Settings
+app:
+  name: "Martin"
+  version: "3.0.0"
+  debug: false

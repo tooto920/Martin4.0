@@ -1,140 +1,158 @@
 """
-Tools page for Martin GUI.
+Tool registry foundation for Martin.
+Defines base tool interface and registry.
 """
-
-from PySide6.QtCore import Qt, Signal, Slot
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QListWidget,
-    QListWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
-
-from app.core.logger import get_logger
-from app.core.tools import SafetyLevel, get_tool_registry
-from app.gui.theme import DARK_THEME
-
-logger = get_logger(__name__)
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, ClassVar
 
 
-class ToolItemWidget(QFrame):
-    """Tool list item widget."""
+class SafetyLevel(Enum):
+    """Safety level for tools."""
+    SAFE = "safe"
+    CAUTION = "caution"
+    DANGEROUS = "dangerous"
 
-    toggled = Signal(str, bool)
 
-    def __init__(self, tool) -> None:
-        super().__init__()
-        self.setObjectName("panel")
-        self._tool = tool
+@dataclass
+class ToolParameter:
+    """Tool parameter definition."""
+    name: str
+    type: str
+    description: str
+    required: bool = True
+    default: Any = None
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(12)
 
-        # Tool info
-        info_layout = QVBoxLayout()
-        info_layout.setSpacing(4)
+@dataclass
+class ToolResult:
+    """Result of tool execution."""
+    success: bool
+    data: Any = None
+    error: str | None = None
+    requires_confirmation: bool = False
+    confirmation_message: str | None = None
 
-        name_layout = QHBoxLayout()
-        name_label = QLabel(tool.name)
-        name_label.setStyleSheet(f"font-weight: bold; font-size: {DARK_THEME.font_size}pt;")
-        name_layout.addWidget(name_label)
 
-        # Safety badge
-        safety_label = QLabel(tool.safety_level.value.upper())
-        safety_label.setFixedWidth(80)
-        safety_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        safety_label.setStyleSheet(self._get_safety_style(tool.safety_level))
-        name_layout.addWidget(safety_label)
+class BaseTool(ABC):
+    """Base class for all tools."""
 
-        name_layout.addStretch()
-        info_layout.addLayout(name_layout)
+    name: ClassVar[str] = ""
+    description: ClassVar[str] = ""
+    parameters: ClassVar[list[ToolParameter]] = []
+    safety_level: ClassVar[SafetyLevel] = SafetyLevel.SAFE
+    requires_confirmation: ClassVar[bool] = False
 
-        desc_label = QLabel(tool.description)
-        desc_label.setObjectName("secondaryLabel")
-        desc_label.setWordWrap(True)
-        info_layout.addWidget(desc_label)
+    @abstractmethod
+    def execute(self, **kwargs: Any) -> ToolResult:
+        """Execute the tool with given parameters."""
 
-        layout.addLayout(info_layout, 1)
-
-        # Enable checkbox
-        self._checkbox = QCheckBox("Enabled")
-        self._checkbox.setChecked(get_tool_registry().is_enabled(tool.name))
-        self._checkbox.toggled.connect(lambda checked: self.toggled.emit(tool.name, checked))
-        layout.addWidget(self._checkbox)
-
-    def _get_safety_style(self, level: SafetyLevel) -> str:
-        """Get style for safety level badge."""
-        colors = {
-            SafetyLevel.SAFE: ("#107c10", "#dff6dd"),
-            SafetyLevel.CAUTION: ("#bf8700", "#fff3cd"),
-            SafetyLevel.DANGEROUS: ("#d13438", "#f8d7da"),
+    def get_schema(self) -> dict[str, Any]:
+        """Get JSON schema for function calling."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    param.name: {
+                        "type": param.type,
+                        "description": param.description,
+                    }
+                    for param in self.parameters
+                },
+                "required": [
+                    param.name for param in self.parameters if param.required
+                ],
+            },
         }
-        bg, text = colors.get(level, ("#666666", "#ffffff"))
-        return f"""
-            background-color: {bg};
-            color: {text};
-            border-radius: 4px;
-            padding: 2px 8px;
-            font-size: {DARK_THEME.font_size_small}pt;
-            font-weight: bold;
-        """
 
 
-class ToolsPage(QWidget):
-    """Tools page showing available tools."""
+class ToolRegistry:
+    """Registry for managing available tools."""
 
     def __init__(self) -> None:
-        super().__init__()
-        self._registry = get_tool_registry()
-        self._init_ui()
-        self._load_tools()
+        self._tools: dict[str, BaseTool] = {}
+        self._enabled_tools: set[str] = set()
 
-    def _init_ui(self) -> None:
-        """Initialize UI."""
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(24, 24, 24, 24)
-        main_layout.setSpacing(16)
+    def register(self, tool: BaseTool) -> None:
+        """Register a tool."""
+        if not tool.name:
+            raise ValueError("Tool must have a name")
+        self._tools[tool.name] = tool
 
-        # Title
-        title = QLabel("Tools")
-        title.setStyleSheet(f"font-size: {DARK_THEME.font_size_large + 4}pt; font-weight: bold; color: {DARK_THEME.text_primary};")
-        main_layout.addWidget(title)
+    def unregister(self, name: str) -> None:
+        """Unregister a tool."""
+        self._tools.pop(name, None)
+        self._enabled_tools.discard(name)
 
-        # Description
-        desc = QLabel("Manage available tools for Martin. Dangerous tools require explicit confirmation before execution.")
-        desc.setObjectName("secondaryLabel")
-        desc.setWordWrap(True)
-        main_layout.addWidget(desc)
+    def get(self, name: str) -> BaseTool | None:
+        """Get a tool by name."""
+        return self._tools.get(name)
 
-        # Tool list
-        self._list = QListWidget()
-        self._list.setFrameShape(QFrame.Shape.NoFrame)
-        self._list.setSpacing(8)
-        main_layout.addWidget(self._list, 1)
+    def list_tools(self) -> list[BaseTool]:
+        """List all registered tools."""
+        return list(self._tools.values())
 
-    def _load_tools(self) -> None:
-        """Load tools into list."""
-        self._list.clear()
-        tools = self._registry.list_tools()
+    def list_enabled(self) -> list[BaseTool]:
+        """List enabled tools."""
+        return [self._tools[name] for name in self._enabled_tools if name in self._tools]
 
-        for tool in tools:
-            item = QListWidgetItem()
-            widget = ToolItemWidget(tool)
-            widget.toggled.connect(self._on_tool_toggled)
-            item.setSizeHint(widget.sizeHint())
-            self._list.addItem(item)
-            self._list.setItemWidget(item, widget)
+    def enable(self, name: str) -> bool:
+        """Enable a tool."""
+        if name in self._tools:
+            self._enabled_tools.add(name)
+            return True
+        return False
 
-    @Slot(str, bool)
-    def _on_tool_toggled(self, tool_name: str, enabled: bool) -> None:
-        """Handle tool enable/disable."""
-        if enabled:
-            self._registry.enable(tool_name)
-        else:
-            self._registry.disable(tool_name)
-        logger.info(f"Tool '{tool_name}' {'enabled' if enabled else 'disabled'}")
+    def disable(self, name: str) -> bool:
+        """Disable a tool."""
+        if name in self._enabled_tools:
+            self._enabled_tools.remove(name)
+            return True
+        return False
+
+    def is_enabled(self, name: str) -> bool:
+        """Check if tool is enabled."""
+        return name in self._enabled_tools
+
+    def get_schemas(self) -> list[dict[str, Any]]:
+        """Get schemas for all enabled tools."""
+        return [tool.get_schema() for tool in self.list_enabled()]
+
+    def execute(self, name: str, **kwargs: Any) -> ToolResult:
+        """Execute a tool by name."""
+        tool = self._tools.get(name)
+        if not tool:
+            return ToolResult(
+                success=False,
+                error=f"Tool '{name}' not found",
+            )
+
+        if not self.is_enabled(name):
+            return ToolResult(
+                success=False,
+                error=f"Tool '{name}' is not enabled",
+            )
+
+        try:
+            return tool.execute(**kwargs)
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except BaseException as e:  # noqa: BLE001
+            return ToolResult(
+                success=False,
+                error=str(e),
+            )
+
+
+_tool_registry: ToolRegistry | None = None
+
+
+def get_tool_registry() -> ToolRegistry:
+    """Get global tool registry instance."""
+    global _tool_registry
+    if _tool_registry is None:
+        _tool_registry = ToolRegistry()
+    return _tool_registry
